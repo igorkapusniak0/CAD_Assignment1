@@ -5,33 +5,28 @@ import * as dynamodb from "aws-cdk-lib/aws-dynamodb";
 import * as custom from "aws-cdk-lib/custom-resources";
 import { Construct } from "constructs";
 import { generateBatch } from "../shared/util";
-import { movies, movieCasts } from "../seed/movies";
+import { movies, movieCasts, actors, awards } from "../seed/movies";
 import * as apig from "aws-cdk-lib/aws-apigateway";
 
 export class RestAPIStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
 
-    const moviesTable = new dynamodb.Table(this, "MoviesTable", {
+    const CAD_CA1_Table = new dynamodb.Table(this, "AppTable", {
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
-      partitionKey: { name: "id", type: dynamodb.AttributeType.NUMBER },
+      partitionKey: { name: "PK", type: dynamodb.AttributeType.STRING },
+      sortKey: { name: "SK", type: dynamodb.AttributeType.STRING },
       removalPolicy: cdk.RemovalPolicy.DESTROY,
-      tableName: "Movies",
+      tableName: "CAD-CA1",
     });
 
-    const movieCastsTable = new dynamodb.Table(this, "MovieCastTable", {
-      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
-      partitionKey: { name: "movieId", type: dynamodb.AttributeType.NUMBER },
-      sortKey: { name: "actorName", type: dynamodb.AttributeType.STRING },
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
-      tableName: "MovieCast",
- });
+    CAD_CA1_Table.addGlobalSecondaryIndex({
+      indexName: "GSI1",
+      partitionKey: { name: "GSI1PK", type: dynamodb.AttributeType.STRING },
+      sortKey: { name: "GSI1SK", type: dynamodb.AttributeType.STRING },
+    });
 
-    movieCastsTable.addLocalSecondaryIndex({
-      indexName: "roleIx",
-      sortKey: { name: "roleName", type: dynamodb.AttributeType.STRING },
- });
-
+    
     
     const getMovieByIdFn = new lambdanode.NodejsFunction(
       this,
@@ -43,15 +38,80 @@ export class RestAPIStack extends cdk.Stack {
         timeout: cdk.Duration.seconds(10),
         memorySize: 128,
         environment: {
-          TABLE_NAME: moviesTable.tableName,
+          TABLE_NAME: CAD_CA1_Table.tableName,
           REGION: cdk.Aws.REGION,
         },
       }
-      );
+    );
 
-      const deleteMoviesByIdFn = new lambdanode.NodejsFunction(
+    const getMovieActorsFn = new lambdanode.NodejsFunction(
       this,
-      "DeleteMovieByIdFn",
+      "getMovieActorsFn",
+      {
+        architecture: lambda.Architecture.ARM_64,
+        runtime: lambda.Runtime.NODEJS_18_X,
+        entry: `${__dirname}/../lambdas/getMovieActors.ts`,
+        timeout: cdk.Duration.seconds(10),
+        memorySize: 128,
+        environment: {
+          TABLE_NAME: CAD_CA1_Table.tableName,
+          REGION: cdk.Aws.REGION,
+        },
+      }
+    );
+
+    const getMovieCastMemberFn = new lambdanode.NodejsFunction(
+      this,
+      "getMovieCastMemberFn",
+      {
+        architecture: lambda.Architecture.ARM_64,
+        runtime: lambda.Runtime.NODEJS_18_X,
+        entry: `${__dirname}/../lambdas/getMovieCastMember.ts`,
+        timeout: cdk.Duration.seconds(10),
+        memorySize: 128,
+        environment: {
+          TABLE_NAME: CAD_CA1_Table.tableName,
+          REGION: cdk.Aws.REGION,
+        },
+      }
+    );
+
+    const getAwardFn = new lambdanode.NodejsFunction(
+      this,
+      "getAwardFn",
+      {
+        architecture: lambda.Architecture.ARM_64,
+        runtime: lambda.Runtime.NODEJS_18_X,
+        entry: `${__dirname}/../lambdas/getAward.ts`,
+        timeout: cdk.Duration.seconds(10),
+        memorySize: 128,
+        environment: {
+          TABLE_NAME: CAD_CA1_Table.tableName,
+          REGION: cdk.Aws.REGION,
+        },
+      }
+    );
+
+
+    const addMovieFn = new lambdanode.NodejsFunction(
+      this,
+      "addMovieFn",
+      {
+        architecture: lambda.Architecture.ARM_64,
+        runtime: lambda.Runtime.NODEJS_18_X,
+        entry: `${__dirname}/../lambdas/addMovie.ts`,
+        timeout: cdk.Duration.seconds(10),
+        memorySize: 128,
+        environment: {
+          TABLE_NAME: CAD_CA1_Table.tableName,
+          REGION: cdk.Aws.REGION,
+        },
+      }
+    );
+    
+    const deleteMovieFn = new lambdanode.NodejsFunction(
+      this,
+      "deleteMovieFn",
       {
         architecture: lambda.Architecture.ARM_64,
         runtime: lambda.Runtime.NODEJS_18_X,
@@ -59,131 +119,103 @@ export class RestAPIStack extends cdk.Stack {
         timeout: cdk.Duration.seconds(10),
         memorySize: 128,
         environment: {
-          TABLE_NAME: moviesTable.tableName,
+          TABLE_NAME: CAD_CA1_Table.tableName,
           REGION: cdk.Aws.REGION,
         },
       }
-      );
+    );
 
-      const newMovieFn = new lambdanode.NodejsFunction(this, "AddMovieFn", {
-      architecture: lambda.Architecture.ARM_64,
-      runtime: lambda.Runtime.NODEJS_16_X,
-      entry: `${__dirname}/../lambdas/addMovie.ts`,
-      timeout: cdk.Duration.seconds(10),
-      memorySize: 128,
-      environment: {
-        TABLE_NAME: moviesTable.tableName,
-        REGION: cdk.Aws.REGION,
-      },
-    });
 
-    const getMovieCastMembersFn = new lambdanode.NodejsFunction(
-      this,
-      "GetCastMemberFn",
-      {
-        architecture: lambda.Architecture.ARM_64,
-        runtime: lambda.Runtime.NODEJS_16_X,
-        entry: `${__dirname}/../lambdas/getMovieCastMember.ts`,
-        timeout: cdk.Duration.seconds(10),
-        memorySize: 128,
-        environment: {
-          TABLE_NAME: movieCastsTable.tableName,
-          REGION: cdk.Aws.REGION,
-        },
-      }
- );
-      
-      const getAllMoviesFn = new lambdanode.NodejsFunction(
-        this,
-        "GetAllMoviesFn",
-        {
-          architecture: lambda.Architecture.ARM_64,
-          runtime: lambda.Runtime.NODEJS_18_X,
-          entry: `${__dirname}/../lambdas/getAllMovies.ts`,
-          timeout: cdk.Duration.seconds(10),
-          memorySize: 128,
-          environment: {
-            TABLE_NAME: moviesTable.tableName,
-            REGION: cdk.Aws.REGION,
-          },
-        }
-        );
         
-        new custom.AwsCustomResource(this, "moviesddbInitData", {
+    new custom.AwsCustomResource(this, "ddbInitData", {
       onCreate: {
         service: "DynamoDB",
         action: "batchWriteItem",
         parameters: {
           RequestItems: {
-            [moviesTable.tableName]: generateBatch(movies),
-            [movieCastsTable.tableName]: generateBatch(movieCasts),  // Added
- },
- },
-        physicalResourceId: custom.PhysicalResourceId.of("moviesddbInitData"), //.of(Date.now().toString()),
- },
+            [CAD_CA1_Table.tableName]: generateBatch([
+              ...movies,
+              ...actors,
+              ...movieCasts,
+              ...awards,
+            ]),
+          },
+        },
+        physicalResourceId: custom.PhysicalResourceId.of("ddbInitData"),
+      },
       policy: custom.AwsCustomResourcePolicy.fromSdkCalls({
-        resources: [moviesTable.tableArn, movieCastsTable.tableArn],  // Includes movie cast
- }),
- });
+        resources: [CAD_CA1_Table.tableArn],
+      }),
+    });
         
-        // Permissions 
-        moviesTable.grantReadData(getMovieByIdFn)
-        moviesTable.grantReadData(getAllMoviesFn)
-        moviesTable.grantReadWriteData(newMovieFn)
-        moviesTable.grantWriteData(deleteMoviesByIdFn)
-        movieCastsTable.grantReadData(getMovieCastMembersFn);
         
-        const api = new apig.RestApi(this, "RestAPI", {
+    CAD_CA1_Table.grantReadData(getMovieByIdFn);
+    CAD_CA1_Table.grantReadData(getMovieActorsFn);
+    CAD_CA1_Table.grantReadData(getMovieCastMemberFn);
+    CAD_CA1_Table.grantReadData(getAwardFn);
+    CAD_CA1_Table.grantWriteData(addMovieFn);
+    CAD_CA1_Table.grantWriteData(deleteMovieFn);
+    
+
+        
+    const api = new apig.RestApi(this, "RestAPI", {
       description: "demo api",
       deployOptions: {
         stageName: "dev",
       },
       defaultCorsPreflightOptions: {
         allowHeaders: ["Content-Type", "X-Amz-Date"],
-        allowMethods: ["OPTIONS", "GET", "POST", "PUT", "PATCH", "DELETE"],
+        allowMethods: ["OPTIONS", "GET", "POST", "DELETE"],
         allowCredentials: true,
         allowOrigins: ["*"],
       },
     });
 
-    
-    
-
     const moviesEndpoint = api.root.addResource("movies");
-    moviesEndpoint.addMethod(
-      "GET",
-      new apig.LambdaIntegration(getAllMoviesFn, { proxy: true })
-    );
-
     const movieEndpoint = moviesEndpoint.addResource("{movieId}");
+    const actorsEndpoint = movieEndpoint.addResource("actors");
+    const actorEndpoint = actorsEndpoint.addResource("{actorId}");
+    const awardsEndpoint = api.root.addResource("awards")
+
+    // Get Movie by Id
     movieEndpoint.addMethod(
       "GET",
-      new apig.LambdaIntegration(getMovieByIdFn, { proxy: true })
-    );
-    movieEndpoint.addMethod(
-      "DELETE",
-      new apig.LambdaIntegration(deleteMoviesByIdFn, { proxy: true })
+      new apig.LambdaIntegration(getMovieByIdFn, {proxy: true})
     );
 
+    // Get All Actors for Movie
+    actorsEndpoint.addMethod(
+      "GET",
+      new apig.LambdaIntegration(getMovieActorsFn, {proxy: true})
+    );
+
+    // Get Movie Cast Member by Actor Id
+    actorEndpoint.addMethod(
+      "GET",
+      new apig.LambdaIntegration(getMovieCastMemberFn, {proxy: true})
+    );
+
+    // Get Awards
+    awardsEndpoint.addMethod(
+      "GET",
+      new apig.LambdaIntegration(getAwardFn, {proxy: true})
+    );
+
+    // Add Movie
     moviesEndpoint.addMethod(
       "POST",
-      new apig.LambdaIntegration(newMovieFn, { proxy: true })
+      new apig.LambdaIntegration(addMovieFn, { proxy: true })
     );
 
-    const movieCastEndpoint = moviesEndpoint.addResource("cast");
-movieCastEndpoint.addMethod(
-    "GET",
-    new apig.LambdaIntegration(getMovieCastMembersFn, { proxy: true })
-);
+    // Delete movie
+    movieEndpoint.addMethod(
+      "DELETE",
+      new apig.LambdaIntegration(deleteMovieFn, {proxy: true})
+    );
+
+  
 
 
-    
-
-
-      }
-
-      
-
-      
+  }    
 }
     

@@ -1,60 +1,18 @@
 import { APIGatewayProxyHandlerV2 } from "aws-lambda";
-import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
-import { DeleteCommand, DynamoDBDocumentClient, GetCommand } from "@aws-sdk/lib-dynamodb";
+import { DeleteCommand } from "@aws-sdk/lib-dynamodb";
+import { createDDbDocClient } from "../shared/util";
+import { withMovieId } from "../shared/withMovieId";
 
-const ddbClient = new DynamoDBClient({ region: process.env.REGION });
-export const handler: APIGatewayProxyHandlerV2 = async (event, context) => {     // Note change
-  try {
-    console.log("[EVENT]", JSON.stringify(event));
-    const parameters  = event?.pathParameters;
-    const movieId = parameters?.movieId ? parseInt(parameters.movieId) : undefined;
+const ddbDocClient = createDDbDocClient();
 
-    if (!movieId) {
-      return {
-        statusCode: 404,
-        headers: {
-          "content-type": "application/json",
-        },
-        body: JSON.stringify({ Message: "Missing movie Id" }),
-      };
-    }
-
-    const commandOutput = await ddbClient.send(
-      new DeleteCommand({
-        TableName: process.env.TABLE_NAME,
-        Key: { id: movieId },
-      })
-    );
-    console.log("GetCommand response: ", commandOutput);
-    if (!commandOutput.Item) {
-      return {
-        statusCode: 200,
-        headers: {
-          "content-type": "application/json",
-        },
-        body: JSON.stringify({ Message: "Movie Deleted" }),
-      };
-    }
-    const body = {
-      data: commandOutput.Item,
-    };
-
-    // Return Response
-    return {
-      statusCode: 200,
-      headers: {
-        "content-type": "application/json",
-      },
-      body: JSON.stringify(body),
-    };
-  } catch (error: any) {
-    console.log(JSON.stringify(error));
-    return {
-      statusCode: 500,
-      headers: {
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({ error }),
-    };
-  }
+export const handler: APIGatewayProxyHandlerV2 = async (event) => {
+  return withMovieId(event, "m.", "movieId", async (movieKey) => {
+    const cmd = new DeleteCommand({
+      TableName: process.env.TABLE_NAME,
+      Key: { id: movieKey },
+      ReturnValues: "ALL_OLD",
+    });
+    const output = await ddbDocClient.send(cmd);
+    return output.Attributes ? { message: `Movie deleted`, deletedMovie: output.Attributes } : null;
+  });
 };
