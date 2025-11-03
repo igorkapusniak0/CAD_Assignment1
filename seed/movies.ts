@@ -47,15 +47,33 @@ export const movieCasts: MovieCast[] = [
 
 export const awards: Award[] = [
   {
+    PK: "m#1",
     awardId: 1,
     body: "Academy Awards",
     category: "Best Visual Effects",
     year: 2011,
   },
   {
+    PK: "m#2",
     awardId: 2,
     body: "BAFTA",
     category: "Best Sound",
     year: 2000,
   },
+  {
+    PK: "a#1",
+    awardId: 1,
+    body: "Academy Awards",
+    category: "Best Male Actor",
+    year: 2011,
+  },
+  {
+    PK: "a#2",
+    awardId: 2,
+    body: "BAFTA",
+    category: "Best Female Actor",
+    year: 2000,
+  },
 ];
+
+

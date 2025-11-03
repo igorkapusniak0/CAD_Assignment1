@@ -13,43 +13,49 @@ export const generateItem = (entity: Entity) => {
 };
 
 export function generateBatch(items: any[]) {
-  return items.map((item) => {
-    let pk = "";
-    let sk = "";
-    let entityType = "";
+  return items
+    .map((item) => {
+      let pk = "";
+      let sk = "";
+      let entityType = "";
 
-    if ("movieId" in item && "title" in item) {
-      pk = `m#${item.movieId}`;
-      sk = pk;
-      entityType = "Movie";
-    } 
-    else if ("actorId" in item && "name" in item) {
-      pk = `a#${item.actorId}`;
-      sk = pk;
-      entityType = "Actor";
-    } 
-    else if ("movieId" in item && "actorId" in item) {
-      pk = `m#${item.movieId}`;
-      sk = `c#a#${item.actorId}`;
-      entityType = "Cast";
-    } 
-    else if ("awardId" in item) {
-      pk = `w#${item.awardId}`;
-      sk = pk;
-      entityType = "Award";
-    }
+      if ("movieId" in item && "title" in item) {
+        pk = `m#${item.movieId}`;
+        sk = pk;
+        entityType = "Movie";
+      } 
+      else if ("actorId" in item && "name" in item) {
+        pk = `a#${item.actorId}`;
+        sk = pk;
+        entityType = "Actor";
+      } 
+      else if ("movieId" in item && "actorId" in item) {
+        pk = `m#${item.movieId}`;
+        sk = `a#${item.actorId}`;
+        entityType = "Cast";
+      }
+      else if ("awardId" in item && item.body) {
+        pk = item.PK
+        sk = `w#${item.body}`;
+        entityType = "Award";
+      } 
+      else {
+        console.error("Unknown item type:", item);
+        return undefined;
+      }
 
-    return {
-      PutRequest: {
-        Item: {
-          ...item,
-          PK: pk,
-          SK: sk,
-          entityType,
+      return {
+        PutRequest: {
+          Item: marshall({
+            ...item,
+            PK: pk,
+            SK: sk,
+            entityType,
+          }),
         },
-      },
-    };
-  });
+      };
+    })
+    .filter((x) => x !== undefined);
 }
 
 export function createDDbDocClient() {
@@ -70,3 +76,4 @@ export function jsonResponse(statusCode: number, body: Record<string, any>) {
     body: JSON.stringify(body),
   };
 }
+

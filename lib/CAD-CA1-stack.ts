@@ -25,8 +25,6 @@ export class RestAPIStack extends cdk.Stack {
       partitionKey: { name: "GSI1PK", type: dynamodb.AttributeType.STRING },
       sortKey: { name: "GSI1SK", type: dynamodb.AttributeType.STRING },
     });
-
-    
     
     const getMovieByIdFn = new lambdanode.NodejsFunction(
       this,
@@ -125,7 +123,15 @@ export class RestAPIStack extends cdk.Stack {
       }
     );
 
+    const allItems = [...movies, ...actors, ...movieCasts, ...awards];
+    console.log("Seeding items count:", allItems.length);
+    console.log("Sample item:", allItems[0]);
 
+    const batchItems = generateBatch(allItems).filter(Boolean); // remove null/undefined
+    console.log("Final batch items:", batchItems);
+    if (batchItems.length === 0) {
+      console.warn("⚠️ No items to seed in DynamoDB.");
+    }
         
     new custom.AwsCustomResource(this, "ddbInitData", {
       onCreate: {
@@ -133,12 +139,7 @@ export class RestAPIStack extends cdk.Stack {
         action: "batchWriteItem",
         parameters: {
           RequestItems: {
-            [CAD_CA1_Table.tableName]: generateBatch([
-              ...movies,
-              ...actors,
-              ...movieCasts,
-              ...awards,
-            ]),
+            [CAD_CA1_Table.tableName]: batchItems,
           },
         },
         physicalResourceId: custom.PhysicalResourceId.of("ddbInitData"),
