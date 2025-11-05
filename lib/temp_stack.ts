@@ -3,9 +3,8 @@ import { Construct } from "constructs";
 import { UserPool } from "aws-cdk-lib/aws-cognito";
 import { AuthApi } from './constructs/auth-api'
 import {MovieApi } from './constructs/movie-api'
-import * as apig from "aws-cdk-lib/aws-apigateway";
+export class CognitoStack extends cdk.Stack {
 
-export class RestAPIStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
 
@@ -34,5 +33,5 @@ export class RestAPIStack extends cdk.Stack {
     } );
 
   } 
-    
+
 }
