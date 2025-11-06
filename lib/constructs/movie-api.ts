@@ -23,23 +23,26 @@ export class MovieApi extends Construct {
         sortKey: { name: "SK", type: dynamodb.AttributeType.STRING },
         removalPolicy: cdk.RemovalPolicy.DESTROY,
         tableName: "CAD-CA1",
-      });
+    });
   
-      CAD_CA1_Table.addGlobalSecondaryIndex({
+    CAD_CA1_Table.addGlobalSecondaryIndex({
         indexName: "GSI1",
         partitionKey: { name: "GSI1PK", type: dynamodb.AttributeType.STRING },
         sortKey: { name: "GSI1SK", type: dynamodb.AttributeType.STRING },
       });
 
-    const appCommonFnProps = {
+      
+
+      const appCommonFnProps = {
         architecture: lambda.Architecture.ARM_64,
         timeout: cdk.Duration.seconds(10),
         memorySize: 128,
-        runtime: lambda.Runtime.NODEJS_16_X,
+        runtime: lambda.Runtime.NODEJS_18_X,
         handler: "handler",
         environment: {
           USER_POOL_ID: props.userPoolId,
           CLIENT_ID: props.userPoolClientId,
+          TABLE_NAME: CAD_CA1_Table.tableName,
           REGION: cdk.Aws.REGION,
         },
       };
@@ -162,6 +165,26 @@ export class MovieApi extends Construct {
           allowOrigins: ["*"],
         },
       });
+
+      const apiKey = api.addApiKey("AdminApiKey", {
+        apiKeyName: "AdminApiKey",
+        description: "Administrator API Key",
+      });
+      
+      const plan = api.addUsagePlan("AdminUsagePlan", {
+        name: "AdminPlan",
+        apiStages: [{ stage: api.deploymentStage }],
+        throttle: {
+          rateLimit: 10,
+          burstLimit: 2,
+        },
+      });
+      
+      plan.addApiKey(apiKey);
+
+      new cdk.CfnOutput(this, "AdminApiKeyOutput", {
+        value: apiKey.keyId,
+      });
   
       const moviesEndpoint = api.root.addResource("movies");
       const movieEndpoint = moviesEndpoint.addResource("{movieId}");
@@ -184,37 +207,55 @@ export class MovieApi extends Construct {
       // Get Movie by Id
       movieEndpoint.addMethod(
         "GET",
-        new apig.LambdaIntegration(getMovieByIdFn, {proxy: true})
+        new apig.LambdaIntegration(getMovieByIdFn, {proxy: true}),
+        {
+            authorizer: requestAuthorizer,
+            authorizationType: apig.AuthorizationType.CUSTOM,
+        }
       );
   
       // Get All Actors for Movie
       actorsEndpoint.addMethod(
         "GET",
-        new apig.LambdaIntegration(getMovieActorsFn, {proxy: true})
+        new apig.LambdaIntegration(getMovieActorsFn, {proxy: true}),
+        {
+            authorizer: requestAuthorizer,
+            authorizationType: apig.AuthorizationType.CUSTOM,
+        }
       );
   
       // Get Movie Cast Member by Actor Id
       actorEndpoint.addMethod(
         "GET",
-        new apig.LambdaIntegration(getMovieCastMemberFn, {proxy: true})
+        new apig.LambdaIntegration(getMovieCastMemberFn, {proxy: true}),
+        {
+            authorizer: requestAuthorizer,
+            authorizationType: apig.AuthorizationType.CUSTOM,
+        }
       );
   
       // Get Awards
       awardsEndpoint.addMethod(
         "GET",
-        new apig.LambdaIntegration(getAwardFn, {proxy: true})
+        new apig.LambdaIntegration(getAwardFn, {proxy: true}),
+        {
+            authorizer: requestAuthorizer,
+            authorizationType: apig.AuthorizationType.CUSTOM,
+        }
       );
   
       // Add Movie
       moviesEndpoint.addMethod(
         "POST",
-        new apig.LambdaIntegration(addMovieFn, { proxy: true })
+        new apig.LambdaIntegration(addMovieFn, { proxy: true }),
+        { apiKeyRequired: true }
       );
   
       // Delete movie
       movieEndpoint.addMethod(
         "DELETE",
-        new apig.LambdaIntegration(deleteMovieFn, {proxy: true})
+        new apig.LambdaIntegration(deleteMovieFn, {proxy: true}),
+        { apiKeyRequired: true }
       );
   
       protectedRes.addMethod("GET", new apig.LambdaIntegration(protectedFn), {
