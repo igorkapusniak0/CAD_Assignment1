@@ -7,6 +7,7 @@ import { Construct } from "constructs";
 import { generateBatch } from "../../shared/util";
 import { movies, movieCasts, actors, awards } from "../../seed/movies";
 import * as apig from "aws-cdk-lib/aws-apigateway";
+import * as lambdaEventSources from "aws-cdk-lib/aws-lambda-event-sources";
 
 type MovieApiProps = {
   userPoolId: string;
@@ -23,6 +24,7 @@ export class MovieApi extends Construct {
         sortKey: { name: "SK", type: dynamodb.AttributeType.STRING },
         removalPolicy: cdk.RemovalPolicy.DESTROY,
         tableName: "CAD-CA1",
+        stream: dynamodb.StreamViewType.NEW_AND_OLD_IMAGES,
     });
   
     CAD_CA1_Table.addGlobalSecondaryIndex({
@@ -106,20 +108,19 @@ export class MovieApi extends Construct {
         }
       );
   
-      const protectedFn = new lambdanode.NodejsFunction(this, "ProtectedFn", {
-        ...appCommonFnProps,
-        entry: `${__dirname}/../../lambdas/protected.ts`,
-      });
-  
-      const publicFn = new lambdanode.NodejsFunction(this, "PublicFn", {
-        ...appCommonFnProps,
-        entry: `${__dirname}/../../lambdas/public.ts`,
-      });
-  
       const authorizerFn = new lambdanode.NodejsFunction(this, "AuthorizerFn", {
         ...appCommonFnProps,
         entry: "./lambdas/auth/authorizer.ts",
       });
+
+      const stateChangeLoggerFn = new lambdanode.NodejsFunction(this, "StateChangeLoggerFn", {
+        ...appCommonFnProps,
+        entry: `${__dirname}/../../lambdas/stateChangeLogger.ts`,
+      });
+      
+      
+      
+      
   
       const allItems = [...movies, ...actors, ...movieCasts, ...awards];
   
@@ -150,7 +151,7 @@ export class MovieApi extends Construct {
       CAD_CA1_Table.grantReadData(getAwardFn);
       CAD_CA1_Table.grantWriteData(addMovieFn);
       CAD_CA1_Table.grantWriteData(deleteMovieFn);
-      
+      CAD_CA1_Table.grantStreamRead(stateChangeLoggerFn);
   
           
       const api = new apig.RestApi(this, "RestAPI", {
@@ -191,8 +192,6 @@ export class MovieApi extends Construct {
       const actorsEndpoint = movieEndpoint.addResource("actors");
       const actorEndpoint = actorsEndpoint.addResource("{actorId}");
       const awardsEndpoint = api.root.addResource("awards")
-      const protectedRes = api.root.addResource("protected");
-      const publicRes = api.root.addResource("public");
   
       const requestAuthorizer = new apig.RequestAuthorizer(
         this,
@@ -258,12 +257,13 @@ export class MovieApi extends Construct {
         { apiKeyRequired: true }
       );
   
-      protectedRes.addMethod("GET", new apig.LambdaIntegration(protectedFn), {
-        authorizer: requestAuthorizer,
-        authorizationType: apig.AuthorizationType.CUSTOM,
-      });
-  
-      publicRes.addMethod("GET", new apig.LambdaIntegration(publicFn));
+      stateChangeLoggerFn.addEventSource(
+        new lambdaEventSources.DynamoEventSource(CAD_CA1_Table, {
+          startingPosition: lambda.StartingPosition.TRIM_HORIZON,
+          batchSize: 5,
+          retryAttempts: 2,
+        })
+      );
 
     
   }

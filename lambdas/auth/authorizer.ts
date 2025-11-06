@@ -19,6 +19,9 @@ export const handler: APIGatewayRequestAuthorizerHandler = async (event) => {
     process.env.REGION!
   );
 
+  const username = verifiedJwt?.["cognito:username"] || "unknown-user";
+
+  console.log(`${username} ${event.path}${event.queryStringParameters ? "?" + new URLSearchParams(event.queryStringParameters).toString() : ""}`);
   return {
     principalId: verifiedJwt ? verifiedJwt.sub!.toString() : "",
     policyDocument: createPolicy(event, verifiedJwt ? "Allow" : "Deny"),
