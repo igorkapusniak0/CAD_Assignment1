@@ -12,28 +12,12 @@ import * as lambdaEventSources from "aws-cdk-lib/aws-lambda-event-sources";
 type MovieApiProps = {
   userPoolId: string;
   userPoolClientId: string;
+  table: dynamodb.Table;
 };
 
 export class MovieApi extends Construct {
   constructor(scope: Construct, id: string, props: MovieApiProps) {
     super(scope, id);
-
-    const CAD_CA1_Table = new dynamodb.Table(this, "AppTable", {
-        billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
-        partitionKey: { name: "PK", type: dynamodb.AttributeType.STRING },
-        sortKey: { name: "SK", type: dynamodb.AttributeType.STRING },
-        removalPolicy: cdk.RemovalPolicy.DESTROY,
-        tableName: "CAD-CA1",
-        stream: dynamodb.StreamViewType.NEW_AND_OLD_IMAGES,
-    });
-  
-    CAD_CA1_Table.addGlobalSecondaryIndex({
-        indexName: "GSI1",
-        partitionKey: { name: "GSI1PK", type: dynamodb.AttributeType.STRING },
-        sortKey: { name: "GSI1SK", type: dynamodb.AttributeType.STRING },
-      });
-
-      
 
       const appCommonFnProps = {
         architecture: lambda.Architecture.ARM_64,
@@ -44,7 +28,7 @@ export class MovieApi extends Construct {
         environment: {
           USER_POOL_ID: props.userPoolId,
           CLIENT_ID: props.userPoolClientId,
-          TABLE_NAME: CAD_CA1_Table.tableName,
+          TABLE_NAME: props.table.tableName,
           REGION: cdk.Aws.REGION,
         },
       };
@@ -134,24 +118,24 @@ export class MovieApi extends Construct {
           action: "batchWriteItem",
           parameters: {
             RequestItems: {
-              [CAD_CA1_Table.tableName]: batchItems,
+              [props.table.tableName]: batchItems,
             },
           },
           physicalResourceId: custom.PhysicalResourceId.of("ddbInitData"),
         },
         policy: custom.AwsCustomResourcePolicy.fromSdkCalls({
-          resources: [CAD_CA1_Table.tableArn],
+          resources: [props.table.tableArn],
         }),
       });
           
           
-      CAD_CA1_Table.grantReadData(getMovieByIdFn);
-      CAD_CA1_Table.grantReadData(getMovieActorsFn);
-      CAD_CA1_Table.grantReadData(getMovieCastMemberFn);
-      CAD_CA1_Table.grantReadData(getAwardFn);
-      CAD_CA1_Table.grantWriteData(addMovieFn);
-      CAD_CA1_Table.grantWriteData(deleteMovieFn);
-      CAD_CA1_Table.grantStreamRead(stateChangeLoggerFn);
+      props.table.grantReadData(getMovieByIdFn);
+      props.table.grantReadData(getMovieActorsFn);
+      props.table.grantReadData(getMovieCastMemberFn);
+      props.table.grantReadData(getAwardFn);
+      props.table.grantWriteData(addMovieFn);
+      props.table.grantWriteData(deleteMovieFn);
+      props.table.grantStreamRead(stateChangeLoggerFn);
   
           
       const api = new apig.RestApi(this, "RestAPI", {
@@ -258,7 +242,7 @@ export class MovieApi extends Construct {
       );
   
       stateChangeLoggerFn.addEventSource(
-        new lambdaEventSources.DynamoEventSource(CAD_CA1_Table, {
+        new lambdaEventSources.DynamoEventSource(props.table, {
           startingPosition: lambda.StartingPosition.TRIM_HORIZON,
           batchSize: 5,
           retryAttempts: 2,

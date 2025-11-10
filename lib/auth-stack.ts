@@ -1,11 +1,12 @@
 import * as cdk from "aws-cdk-lib";
 import { Construct } from "constructs";
 import { UserPool } from "aws-cdk-lib/aws-cognito";
-import { AuthApi } from './constructs/auth-api'
-import {MovieApi } from './constructs/movie-api'
-import * as apig from "aws-cdk-lib/aws-apigateway";
+import { AuthApi } from "./constructs/auth-api";
 
-export class RestAPIStack extends cdk.Stack {
+export class AuthStack extends cdk.Stack {
+  public readonly userPoolId: string;
+  public readonly userPoolClientId: string;
+
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
 
@@ -15,24 +16,16 @@ export class RestAPIStack extends cdk.Stack {
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
-    const userPoolId = userPool.userPoolId;
-
     const appClient = userPool.addClient("AppClient", {
       authFlows: { userPassword: true },
     });
 
-    const userPoolClientId = appClient.userPoolClientId;
+    this.userPoolId = userPool.userPoolId;
+    this.userPoolClientId = appClient.userPoolClientId;
 
-    new AuthApi(this, 'AuthServiceApi', {
-      userPoolId: userPoolId,
-      userPoolClientId: userPoolClientId,
+    new AuthApi(this, "AuthApi", {
+      userPoolId: this.userPoolId,
+      userPoolClientId: this.userPoolClientId,
     });
-
-    new MovieApi(this, 'AppApi', {
-      userPoolId: userPoolId,
-      userPoolClientId: userPoolClientId,
-    } );
-
-  } 
-    
+  }
 }
