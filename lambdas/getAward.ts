@@ -43,7 +43,7 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
         results.push(...(movieOutput.Items || []));
       }
   
-      if (actor) {
+      if (actor && !movie) {
         const actorCommandInput: QueryCommandInput = {
           TableName: process.env.TABLE_NAME,
           KeyConditionExpression: "PK = :pk AND begins_with(SK, :skPrefix)",
@@ -52,19 +52,28 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
             ":skPrefix": "w#",
           },
         };
-  
         const actorOutput = await ddbDocClient.send(new QueryCommand(actorCommandInput));
         results.push(...(actorOutput.Items || []));
       }
   
-      const filteredResults = awardBody
-        ? results.filter((award) => award.body?.toLowerCase() === awardBody.toLowerCase())
-        : results;
+      let filtered = results;
   
-      return jsonResponse(200, { data: filteredResults });
+      if (actor && movie) {
+        filtered = filtered.filter(
+          (award) => award.actorId === actor && award.movieId === movie
+        );
+      }
+  
+      if (awardBody) {
+        filtered = filtered.filter(
+          (award) =>  award.category?.toLowerCase() === awardBody.toLowerCase()
+        );
+      }
+  
+      return jsonResponse(200, { data: filtered });
     } catch (error: any) {
       console.error(error);
-      return jsonResponse(500, { error });
+      return jsonResponse(500, { error: error.message || "Internal server error" });
     }
   };
   

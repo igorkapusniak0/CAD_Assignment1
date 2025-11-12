@@ -102,10 +102,6 @@ export class MovieApi extends Construct {
         entry: `${__dirname}/../../lambdas/stateChangeLogger.ts`,
       });
       
-      
-      
-      
-  
       const allItems = [...movies, ...actors, ...movieCasts, ...awards];
   
       const batchItems = generateBatch(allItems).filter(Boolean);

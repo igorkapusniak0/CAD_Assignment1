@@ -31,7 +31,7 @@ export function generateBatch(items: any[]) {
       } 
       else if ("movieId" in item && "actorId" in item) {
         pk = `m#${item.movieId}`;
-        sk = `a#${item.actorId}`;
+        sk = `c#${item.actorId}`;
         entityType = "Cast";
       }
       else if ("awardId" in item && item.body) {

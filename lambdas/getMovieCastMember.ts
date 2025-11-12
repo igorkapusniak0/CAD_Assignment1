@@ -13,7 +13,7 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
     if (!actorId) return jsonResponse(400, { message: "Missing actorId" });
 
     const movieKey = `m#${movieId}`;
-    const castSortKey = `c#a#${actorId}`; 
+    const castSortKey = `c#${actorId}`; 
 
     const cmd = new GetCommand({
       TableName: process.env.TABLE_NAME,
